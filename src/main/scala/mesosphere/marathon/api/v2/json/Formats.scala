@@ -15,7 +15,7 @@ import mesosphere.marathon.core.pod.PodDefinition
 import mesosphere.marathon.core.readiness.ReadinessCheck
 import mesosphere.marathon.core.task.Task
 import mesosphere.marathon.core.task.state.NetworkInfo
-import mesosphere.marathon.raml.{ Pod, Raml, Resources, UnreachableStrategy, KillSelection }
+import mesosphere.marathon.raml.{ Pod, Raml, Resources, KillSelection }
 import mesosphere.marathon.state
 import mesosphere.marathon.state._
 import mesosphere.marathon.upgrade.DeploymentManager.DeploymentStepInfo
@@ -1096,7 +1096,7 @@ trait AppAndGroupFormats {
             readinessChecks = extra.readinessChecks,
             secrets = extra.secrets,
             taskKillGracePeriod = extra.maybeTaskKillGracePeriod,
-            unreachableStrategy = extra.unreachableStrategy.fold(defaultUnreachableStrategy)(Raml.fromRaml(_)),
+            unreachableStrategy = extra.unreachableStrategy.getOrElse(defaultUnreachableStrategy),
             killSelection = extra.killSelection.fold(state.KillSelection.DefaultKillSelection)(Raml.fromRaml(_))
           )
         }
@@ -1160,6 +1160,17 @@ trait AppAndGroupFormats {
           JsError(s"'$behaviorString' is not a valid taskLostBehavior. Allowed values: $allowedTaskLostBehaviorString")
       }
 
+    }
+  }
+
+  implicit val UnreachableStrategyFormat: Format[UnreachableStrategy] = new Format[UnreachableStrategy] {
+    // override def
+    override def reads(json: JsValue): JsResult[UnreachableStrategy] = {
+      json.validate[raml.UnreachableStrategy].map(Raml.fromRaml(_))
+    }
+
+    override def writes(unreachableStrategy: UnreachableStrategy): JsValue = {
+      Json.toJson(Raml.toRaml(unreachableStrategy))
     }
   }
 
@@ -1379,7 +1390,7 @@ trait AppAndGroupFormats {
         storeUrls = storeUrls, requirePorts = requirePorts,
         backoff = backoffSeconds, backoffFactor = backoffFactor, maxLaunchDelay = maxLaunchDelaySeconds,
         container = container, healthChecks = healthChecks, dependencies = dependencies,
-        unreachableStrategy = unreachableStrategy.map(Raml.fromRaml(_)),
+        unreachableStrategy = unreachableStrategy,
         killSelection = killSelection.map(Raml.fromRaml(_))
       )
     ).flatMap { update =>

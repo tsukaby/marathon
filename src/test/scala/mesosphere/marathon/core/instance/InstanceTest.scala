@@ -8,7 +8,7 @@ import mesosphere.marathon.core.condition.Condition._
 import mesosphere.marathon.core.task.Task
 import mesosphere.marathon.core.task.bus.MesosTaskStatusTestHelper
 import mesosphere.marathon.state.PathId._
-import mesosphere.marathon.state.Timestamp
+import mesosphere.marathon.state.{ Timestamp, UnreachableStrategy }
 import org.scalatest.prop.TableDrivenPropertyChecks
 
 class InstanceTest extends UnitTest with TableDrivenPropertyChecks {
@@ -116,7 +116,8 @@ class InstanceTest extends UnitTest with TableDrivenPropertyChecks {
       val currentTasks = tasks(conditions.map(_ => condition))
       val newTasks = tasks(conditions)
       val state = Instance.InstanceState(None, currentTasks, Timestamp.now())
-      val instance = Instance(Instance.Id.forRunSpec(id), agentInfo, state, currentTasks, runSpecVersion = Timestamp.now())
+      val instance = Instance(Instance.Id.forRunSpec(id), agentInfo, state, currentTasks,
+        runSpecVersion = Timestamp.now(), UnreachableStrategy.default())
       (instance, newTasks)
     }
   }

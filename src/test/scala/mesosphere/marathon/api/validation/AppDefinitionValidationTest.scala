@@ -3,7 +3,7 @@ package api.validation
 
 import mesosphere.UnitTest
 import mesosphere.marathon.core.plugin.PluginManager
-import mesosphere.marathon.state.{ AppDefinition, PathId, UnreachableStrategy }
+import mesosphere.marathon.state._
 import com.wix.accord.scalatest.ResultMatchers
 
 import scala.concurrent.duration._
@@ -26,7 +26,7 @@ class AppDefinitionValidationTest extends UnitTest with ResultMatchers {
         val app = AppDefinition(
           id = PathId("/test"),
           cmd = Some("sleep 1000"),
-          unreachableStrategy = UnreachableStrategy(0.second))
+          unreachableStrategy = UnreachableEnabled(0.seconds))
 
         val expectedViolation = GroupViolationMatcher(description = "unreachableStrategy", constraint = "is invalid")
         validator(app) should failWith(expectedViolation)

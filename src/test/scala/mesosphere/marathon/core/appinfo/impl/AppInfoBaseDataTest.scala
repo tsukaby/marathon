@@ -417,7 +417,9 @@ class AppInfoBaseDataTest extends UnitTest with GroupCreation {
         agentInfo = Instance.AgentInfo("", None, Nil),
         state = InstanceState(None, tasks, f.clock.now()),
         tasksMap = tasks,
-        runSpecVersion = pod.version)
+        runSpecVersion = pod.version,
+        unreachableStrategy = UnreachableStrategy.default()
+      )
     }
 
     "pod statuses xref the correct spec versions" in {

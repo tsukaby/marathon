@@ -6,7 +6,7 @@ import mesosphere.marathon.core.base.ConstantClock
 import mesosphere.marathon.core.condition.Condition
 import mesosphere.marathon.core.task.Task
 import mesosphere.marathon.core.task.bus.MesosTaskStatusTestHelper
-import mesosphere.marathon.state.Timestamp
+import mesosphere.marathon.state.{ Timestamp, UnreachableEnabled }
 import mesosphere.marathon.state.PathId._
 import org.scalatest.prop.TableDrivenPropertyChecks
 
@@ -121,7 +121,8 @@ class InstanceStateTest extends UnitTest with TableDrivenPropertyChecks {
 
         val tasks = f.tasks(conditions).values
 
-        val actualCondition = Instance.InstanceState.conditionFromTasks(tasks, f.clock.now, 5.minutes)
+        val actualCondition = Instance.InstanceState.conditionFromTasks(
+          tasks, f.clock.now, UnreachableEnabled(5.minutes))
 
         s"return condition $expected" in { actualCondition should be(expected) }
       }
@@ -132,7 +133,8 @@ class InstanceStateTest extends UnitTest with TableDrivenPropertyChecks {
   it should {
     "return Unknown for an empty task list" in {
       val f = new Fixture()
-      val result = Instance.InstanceState.conditionFromTasks(Iterable.empty, f.clock.now(), 5.minutes)
+      val result = Instance.InstanceState.conditionFromTasks(
+        Iterable.empty, f.clock.now(), UnreachableEnabled(5.minutes))
 
       result should be(Condition.Unknown)
     }
