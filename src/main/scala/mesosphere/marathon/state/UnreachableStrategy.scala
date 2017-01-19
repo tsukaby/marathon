@@ -1,46 +1,73 @@
 package mesosphere.marathon
 package state
 
+import com.wix.accord._
 import com.wix.accord.dsl._
 
 import scala.concurrent.duration._
 import mesosphere.marathon.Protos
 
+sealed trait UnreachableStrategy {
+  def toProto: Protos.UnreachableStrategy
+}
+
+case object UnreachableDisabled extends UnreachableStrategy {
+  val toProto: Protos.UnreachableStrategy =
+    Protos.UnreachableStrategy.newBuilder.
+      setMode(Protos.UnreachableStrategy.Mode.DISABLED).
+      build
+}
+
 /**
   * Defines the time outs for unreachable tasks.
   */
-case class UnreachableStrategy(
-    inactiveAfter: FiniteDuration = UnreachableStrategy.DefaultEphemeralInactiveAfter,
-    expungeAfter: FiniteDuration = UnreachableStrategy.DefaultEphemeralExpungeAfter) {
+case class UnreachableEnabled(
+    inactiveAfter: FiniteDuration = UnreachableEnabled.DefaultInactiveAfter,
+    expungeAfter: FiniteDuration = UnreachableEnabled.DefaultExpungeAfter) extends UnreachableStrategy {
 
   def toProto: Protos.UnreachableStrategy =
     Protos.UnreachableStrategy.newBuilder.
       setExpungeAfterSeconds(expungeAfter.toSeconds).
       setInactiveAfterSeconds(inactiveAfter.toSeconds).
+      setMode(Protos.UnreachableStrategy.Mode.INACTIVE_AND_EXPUNGE).
       build
 }
+object UnreachableEnabled {
+  val DefaultInactiveAfter: FiniteDuration = 5.minutes
+  val DefaultExpungeAfter: FiniteDuration = 10.minutes
+  val default = UnreachableEnabled()
 
-object UnreachableStrategy {
-  val DefaultEphemeralInactiveAfter: FiniteDuration = 5.minutes
-  val DefaultEphemeralExpungeAfter: FiniteDuration = 10.minutes
-  val DefaultResidentInactiveAfter: FiniteDuration = 1.hour
-  val DefaultResidentExpungeAfter: FiniteDuration = 7.days
-
-  val defaultEphemeral = UnreachableStrategy(DefaultEphemeralInactiveAfter, DefaultEphemeralExpungeAfter)
-  val defaultResident = UnreachableStrategy(DefaultResidentInactiveAfter, DefaultResidentExpungeAfter)
-
-  implicit val unreachableStrategyValidator = validator[UnreachableStrategy] { strategy =>
+  implicit val unreachableEnabledValidator = validator[UnreachableEnabled] { strategy =>
     strategy.inactiveAfter should be >= 1.second
     strategy.inactiveAfter should be < strategy.expungeAfter
   }
+}
 
-  def default(resident: Boolean): UnreachableStrategy = {
-    if (resident) defaultResident else defaultEphemeral
+object UnreachableStrategy {
+
+  def default(resident: Boolean = false): UnreachableStrategy = {
+    if (resident) UnreachableDisabled else UnreachableEnabled.default
   }
 
-  def fromProto(unreachableStrategyProto: Protos.UnreachableStrategy): UnreachableStrategy = {
-    UnreachableStrategy(
-      inactiveAfter = unreachableStrategyProto.getInactiveAfterSeconds.seconds,
-      expungeAfter = unreachableStrategyProto.getExpungeAfterSeconds.seconds)
+  def fromProto(proto: Protos.UnreachableStrategy): UnreachableStrategy = {
+    import Protos.UnreachableStrategy.Mode.{ INACTIVE_AND_EXPUNGE, DISABLED }
+
+    proto.getMode match {
+      case DISABLED =>
+        UnreachableDisabled
+      case INACTIVE_AND_EXPUNGE =>
+        UnreachableEnabled(
+          inactiveAfter = proto.getInactiveAfterSeconds.seconds,
+          expungeAfter = proto.getExpungeAfterSeconds.seconds)
+    }
+  }
+
+  implicit val unreachableStrategyValidator = new Validator[UnreachableStrategy] {
+    def apply(strategy: UnreachableStrategy): Result = strategy match {
+      case UnreachableDisabled =>
+        Success
+      case unreachableEnabled: UnreachableEnabled =>
+        validate(unreachableEnabled)
+    }
   }
 }
