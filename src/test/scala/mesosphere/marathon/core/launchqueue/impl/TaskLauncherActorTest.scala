@@ -145,7 +145,9 @@ class TaskLauncherActorTest extends MarathonSpec with GivenWhenThen {
     Mockito.verify(instanceOpFactory).matchOfferRequest(matchRequest)
   }
 
-  test("Don't pass the task factory lost tasks when asking for new tasks") {
+  test("Pass all instances to the task factory including unreachable and reserved") {
+    // background: we might receive offers with reservations/volumes that are associated with
+    // unreachable instances. If we do, we do want these to be matched.
     import mesosphere.marathon.Protos.Constraint.Operator
 
     val uniqueConstraint = Protos.Constraint.newBuilder
@@ -160,7 +162,7 @@ class TaskLauncherActorTest extends MarathonSpec with GivenWhenThen {
 
     Mockito.when(instanceTracker.instancesBySpecSync).thenReturn(InstanceTracker.InstancesBySpec.forInstances(lostInstance))
     val captor = ArgumentCaptor.forClass(classOf[InstanceOpFactory.Request])
-    // we're only interested in capturing the argument, so return value doesn't matte
+    // we're only interested in capturing the argument, so return value doesn't matter
     Mockito.when(instanceOpFactory.matchOfferRequest(captor.capture())).thenReturn(f.noMatchResult)
 
     val launcherRef = createLauncherRef(instances = 1, constraintApp)
@@ -169,7 +171,7 @@ class TaskLauncherActorTest extends MarathonSpec with GivenWhenThen {
     Await.result(launcherRef ? ActorOfferMatcher.MatchOffer(clock.now() + 1.seconds, offer), 3.seconds).asInstanceOf[MatchedInstanceOps]
     Mockito.verify(instanceTracker).instancesBySpecSync
     Mockito.verify(instanceOpFactory).matchOfferRequest(m.any())
-    assert(captor.getValue.instanceMap.isEmpty)
+    assert(captor.getValue.instanceMap.size == 1)
   }
 
   test("Wait for inflight task launches on stop") {

@@ -20,7 +20,6 @@ import mesosphere.marathon.core.matcher.manager.OfferMatcherManager
 import mesosphere.marathon.core.task.tracker.InstanceTracker
 import mesosphere.marathon.state.{ RunSpec, Timestamp }
 import org.apache.mesos.{ Protos => Mesos }
-import mesosphere.marathon.stream._
 
 import scala.concurrent.duration._
 
@@ -358,9 +357,8 @@ private class TaskLauncherActor(
       log.debug("ignoring offer, offer deadline {}reached. {}", if (deadlineReached) "" else "NOT ", status)
       sender ! MatchedInstanceOps(offer.getId)
 
-    case ActorOfferMatcher.MatchOffer(deadline, offer) =>
-      val reachableInstances = instanceMap.filterNotAs{ case (_, instance) => instance.state.condition.isLost }
-      val matchRequest = InstanceOpFactory.Request(runSpec, offer, reachableInstances, instancesToLaunch)
+    case ActorOfferMatcher.MatchOffer(_, offer) =>
+      val matchRequest = InstanceOpFactory.Request(runSpec, offer, instanceMap, instancesToLaunch)
       instanceOpFactory.matchOfferRequest(matchRequest) match {
         case matched: OfferMatchResult.Match =>
           offerMatchStatisticsActor ! matched
