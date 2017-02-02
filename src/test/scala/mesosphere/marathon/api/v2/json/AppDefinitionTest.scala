@@ -135,6 +135,7 @@ class AppDefinitionTest extends MarathonSpec with Matchers {
     )
 
     val correct = AppDefinition(id = "test".toRootPath)
+    val containerNetworking = Seq(ContainerNetwork("dcos"))
 
     app = correct.copy(
       container = Some(Docker(
@@ -144,7 +145,8 @@ class AppDefinitionTest extends MarathonSpec with Matchers {
           PortMapping(8081, Some(0), 0, "tcp", Some("bar"))
         )
       )),
-      portDefinitions = Nil)
+      portDefinitions = Nil,
+      networks = containerNetworking)
     shouldNotViolate(
       app,
       "/container/portMappings",
@@ -368,7 +370,7 @@ class AppDefinitionTest extends MarathonSpec with Matchers {
 
     shouldViolate(
       app,
-      "/fetch(1)",
+      "/fetch(1)/uri",
       "URI has invalid syntax."
     )
 

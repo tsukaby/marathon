@@ -4,6 +4,7 @@ package api.v2
 import java.net._
 
 import com.wix.accord._
+import com.wix.accord.dsl._
 import com.wix.accord.ViolationBuilder._
 import mesosphere.marathon.state.FetchUri
 import mesosphere.marathon.stream._
@@ -162,17 +163,21 @@ trait Validation {
     }
   }
 
-  def fetchUriIsValid: Validator[FetchUri] = {
-    new Validator[FetchUri] {
-      def apply(uri: FetchUri) = {
+  def uriIsValid: Validator[String] = {
+    new Validator[String] {
+      def apply(url: String) = {
         try {
-          new URI(uri.uri)
+          new URI(url)
           Success
         } catch {
-          case _: URISyntaxException => Failure(Set(RuleViolation(uri.uri, "URI has invalid syntax.", None)))
+          case _: URISyntaxException => Failure(Set(RuleViolation(url, "URI has invalid syntax.", None)))
         }
       }
     }
+  }
+
+  def fetchUriIsValid: Validator[FetchUri] = validator[FetchUri] { fetch =>
+    fetch.uri is valid(uriIsValid)
   }
 
   def elementsAreUnique[A](errorMessage: String = "Elements must be unique."): Validator[Seq[A]] = {

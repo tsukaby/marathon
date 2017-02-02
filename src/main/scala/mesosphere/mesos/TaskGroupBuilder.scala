@@ -9,18 +9,20 @@ import mesosphere.marathon.raml
 import mesosphere.marathon.state.{ EnvVarString, PathId, PortAssignment, Timestamp }
 import mesosphere.marathon.stream._
 import mesosphere.marathon.tasks.PortsMatch
+import mesosphere.mesos.protos.LabelHelpers._
 import org.apache.mesos.{ Protos => mesos }
+
 import org.slf4j.LoggerFactory
 
 import scala.collection.immutable.Seq
 
 object TaskGroupBuilder {
-  val log = LoggerFactory.getLogger(getClass)
+  private val log = LoggerFactory.getLogger(getClass)
 
   // These labels are necessary for AppC images to work.
   // Given that Docker only works under linux with 64bit,
   // let's (for now) set these values to reflect that.
-  val LinuxAmd64 = mesos.Labels.newBuilder
+  private val LinuxAmd64 = mesos.Labels.newBuilder
     .addAllLabels(
       Seq(
         mesos.Label.newBuilder.setKey("os").setValue("linux").build,
@@ -28,7 +30,7 @@ object TaskGroupBuilder {
       ))
     .build
 
-  val ephemeralVolPathPrefix = "volumes/"
+  private val ephemeralVolPathPrefix = "volumes/"
 
   case class BuilderConfig(
     acceptedResourceRoles: Set[String],
@@ -74,7 +76,6 @@ object TaskGroupBuilder {
   // The resource match provides us with a list of host ports.
   // Each port mapping corresponds to an item in that list.
   // We use that list to swap the dynamic ports (ports set to 0) with the matched ones.
-  @SuppressWarnings(Array("OptionGet"))
   private[this] def computePortMappings(
     endpoints: Seq[raml.Endpoint],
     hostPorts: Seq[Option[Int]]): Seq[mesos.NetworkInfo.PortMapping] = {
@@ -84,7 +85,7 @@ object TaskGroupBuilder {
         val portMapping = mesos.NetworkInfo.PortMapping.newBuilder
           .setHostPort(hostPort)
 
-        if (endpoint.containerPort.isEmpty || endpoint.containerPort.get == 0) {
+        if (endpoint.containerPort.forall(_ == 0)) {
           portMapping.setContainerPort(hostPort)
         } else {
           endpoint.containerPort.foreach(portMapping.setContainerPort)
@@ -171,15 +172,6 @@ object TaskGroupBuilder {
     executorInfo.addResources(scalarResource("gpus", podDefinition.executorResources.gpus.toDouble))
     executorInfo.addAllResources(portsMatch.resources)
 
-    def toMesosLabels(labels: Map[String, String]): mesos.Labels.Builder = {
-      labels.map{
-        case (key, value) =>
-          mesos.Label.newBuilder.setKey(key).setValue(value)
-      }.foldLeft(mesos.Labels.newBuilder) { (builder, label) =>
-        builder.addLabels(label)
-      }
-    }
-
     if (podDefinition.networks.nonEmpty || podDefinition.volumes.nonEmpty) {
       val containerInfo = mesos.ContainerInfo.newBuilder
         .setType(mesos.ContainerInfo.Type.MESOS)
@@ -190,7 +182,7 @@ object TaskGroupBuilder {
         case containerNetwork: ContainerNetwork =>
           mesos.NetworkInfo.newBuilder
             .setName(containerNetwork.name)
-            .setLabels(toMesosLabels(containerNetwork.labels))
+            .setLabels(containerNetwork.labels.toMesosLabels)
             .addAllPortMappings(portMappings)
       }.foreach{ networkInfo =>
         containerInfo.addNetworkInfos(networkInfo)
@@ -214,7 +206,7 @@ object TaskGroupBuilder {
       executorInfo.setContainer(containerInfo)
     }
 
-    executorInfo.setLabels(toMesosLabels(podDefinition.labels))
+    executorInfo.setLabels(podDefinition.labels.toMesosLabels)
 
     executorInfo
   }

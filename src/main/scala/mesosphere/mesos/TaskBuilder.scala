@@ -127,10 +127,10 @@ class TaskBuilder(
             case (portMapping, None) =>
               // No host port has been defined. See PortsMatcher.mappedPortRanges, use container port instead.
               val updatedPortMapping =
-                portMapping.copy(labels = portMapping.labels + ("network-scope" -> "container"))
+                portMapping.copy(labels = portMapping.labels + NetworkScope.Container.discovery)
               PortMappingSerializer.toMesosPort(updatedPortMapping, portMapping.containerPort)
             case (portMapping, Some(hostPort)) =>
-              val updatedPortMapping = portMapping.copy(labels = portMapping.labels + ("network-scope" -> "host"))
+              val updatedPortMapping = portMapping.copy(labels = portMapping.labels + NetworkScope.Host.discovery)
               PortMappingSerializer.toMesosPort(updatedPortMapping, hostPort)
           }
         }.getOrElse(Nil)

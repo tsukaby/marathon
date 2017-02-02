@@ -324,7 +324,7 @@ class GroupsResource @Inject() (
       val maybeExistingGroup = result(groupManager.group(group.id))
       val groupConversionContext: raml.GroupConversion.Context = appsResourceContext
       val updatedGroup: Group = Raml.fromRaml(
-        raml.GroupConversion.UpdateGroupStructureOp(groupUpdate, group, newVersion) -> groupConversionContext)
+        raml.GroupConversion.update(groupUpdate, group, newVersion) -> groupConversionContext)
 
       maybeExistingGroup.fold(checkAuthorization(CreateRunSpec, updatedGroup))(checkAuthorization(UpdateGroup, _))
 
@@ -381,6 +381,6 @@ object GroupsResource {
     val preprocessor: (raml.App => raml.App) = AppsResource.preprocessor(enabledFeatures, config)
 
     /** assumes that app is already in canonical form */
-    override def preprocess(app: raml.App): AppDefinition = Raml.fromRaml(app)
+    override def validateNormalizeConvert(app: raml.App): AppDefinition = Raml.fromRaml(app)
   }
 }

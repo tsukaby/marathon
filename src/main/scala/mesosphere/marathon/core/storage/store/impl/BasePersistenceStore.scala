@@ -109,9 +109,10 @@ abstract class BasePersistenceStore[K, Category, Serialized](implicit
     ir: IdResolver[Id, V, Category, K],
     um: Unmarshaller[Serialized, V]): Source[V, NotUsed] = {
 
-    Source(list).mapAsync[Option[Serialized]](Int.MaxValue) { (src: (Id, OffsetDateTime)) =>
-      val storageId = ir.toStorageId(src._1, Some(src._2))
-      rawGet(storageId)
+    Source(list).mapAsync[Option[Serialized]](Int.MaxValue) {
+      case (id, version) =>
+        val storageId = ir.toStorageId(id, Some(version))
+        rawGet(storageId)
     }.collect {
       case Some(marshaled) => marshaled
     }.mapAsync(Int.MaxValue) { marshaled =>

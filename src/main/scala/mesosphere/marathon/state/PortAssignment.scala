@@ -28,6 +28,7 @@ case class PortAssignment(
 object PortAssignment {
   /**
     * If you change this, please also update AppDefinition.json.
+    * TODO(jdef) remove this once we have RAML-generated validation in place
     */
   val PortNamePattern = """^[a-z0-9-]+$""".r
   val NoPort = -1

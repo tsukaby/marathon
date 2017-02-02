@@ -250,7 +250,7 @@ trait AppValidation {
         !(update.container.exists(c => c.`type` == EngineType.Docker) && ipAddress.discovery.nonEmpty)
       })
     update.ports is optional(every(validPortNumber))
-    update.uris is optional(every(ArtifactValidation.uriValidator) and isTrue(
+    update.uris is optional(every(api.v2.Validation.uriIsValid) and isTrue(
       "may not be set in conjunction with fetch"){ (uris: Seq[String]) => !(uris.nonEmpty && update.fetch.fold(false)(_.nonEmpty)) })
   } and isTrue("ports must be unique") { (update: AppUpdate) =>
     val withoutRandom = update.ports.fold(Seq.empty[Int])(_.filterNot(_ == AppDefinition.RandomPortValue))
@@ -312,7 +312,7 @@ trait AppValidation {
         !(app.container.exists(c => c.`type` == EngineType.Docker) && ipAddress.discovery.nonEmpty)
       })
     app.ports is optional(every(validPortNumber))
-    app.uris is optional(every(ArtifactValidation.uriValidator) and isTrue(
+    app.uris is optional(every(api.v2.Validation.uriIsValid) and isTrue(
       "may not be set in conjunction with fetch"){ (uris: Seq[String]) => !(uris.nonEmpty && app.fetch.nonEmpty) })
   } and isTrue("must not specify both container.docker.network and networks") { (app: App) =>
     !(app.container.exists(_.docker.exists(_.network.nonEmpty)) && app.networks.nonEmpty)

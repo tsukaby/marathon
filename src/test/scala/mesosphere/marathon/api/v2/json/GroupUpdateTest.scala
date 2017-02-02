@@ -13,7 +13,7 @@ class GroupUpdateTest extends FunSuite with Matchers with GivenWhenThen with Gro
 
   val noEnabledFeatures = Set.empty[String]
   val groupConversionContext: GroupConversion.Context = new GroupConversion.Context {
-    override def preprocess(app: App): AppDefinition = {
+    override def validateNormalizeConvert(app: App): AppDefinition = {
       // assume canonical form and that the app is valid
       Raml.fromRaml(AppNormalization.apply(app, AppNormalization.Config(None)))
     }
@@ -38,7 +38,7 @@ class GroupUpdateTest extends FunSuite with Matchers with GivenWhenThen with Gro
     val timestamp = Timestamp.now()
 
     When("The update is performed")
-    val result: Group = Raml.fromRaml(GroupConversion.UpdateGroupStructureOp(update, rootGroup, timestamp) -> groupConversionContext)
+    val result: Group = Raml.fromRaml(GroupConversion.update(update, rootGroup, timestamp) -> groupConversionContext)
 
     validate(RootGroup.fromGroup(result))(RootGroup.valid(noEnabledFeatures)).isSuccess should be(true)
 
@@ -82,7 +82,8 @@ class GroupUpdateTest extends FunSuite with Matchers with GivenWhenThen with Gro
     val timestamp = Timestamp.now()
 
     When("The update is performed")
-    val result: RootGroup = RootGroup.fromGroup(Raml.fromRaml((GroupConversion.UpdateGroupStructureOp(update, actual, timestamp), groupConversionContext)))
+    val result: RootGroup = RootGroup.fromGroup(Raml.fromRaml(
+      GroupConversion.update(update, actual, timestamp) -> groupConversionContext))
 
     validate(result)(RootGroup.valid(Set())).isSuccess should be(true)
 
@@ -129,7 +130,7 @@ class GroupUpdateTest extends FunSuite with Matchers with GivenWhenThen with Gro
     )
 
     val timestamp = Timestamp.now()
-    val next = Raml.fromRaml((GroupConversion.UpdateGroupStructureOp(update, current, timestamp), groupConversionContext))
+    val next = Raml.fromRaml(GroupConversion.update(update, current, timestamp) -> groupConversionContext)
     val result = createRootGroup(groups = Set(next))
 
     validate(result)(RootGroup.valid(Set())).isSuccess should be(true)
@@ -152,14 +153,14 @@ class GroupUpdateTest extends FunSuite with Matchers with GivenWhenThen with Gro
   test("A group update should not contain a version") {
     val update = GroupUpdate(None, version = Some(Timestamp.now().toOffsetDateTime))
     intercept[IllegalArgumentException] {
-      Raml.fromRaml((GroupConversion.UpdateGroupStructureOp(update, createRootGroup(), Timestamp.now()), groupConversionContext))
+      Raml.fromRaml(GroupConversion.update(update, createRootGroup(), Timestamp.now()) -> groupConversionContext)
     }
   }
 
   test("A group update should not contain a scaleBy") {
     val update = GroupUpdate(None, scaleBy = Some(3))
     intercept[IllegalArgumentException] {
-      Raml.fromRaml((GroupConversion.UpdateGroupStructureOp(update, createRootGroup(), Timestamp.now()), groupConversionContext))
+      Raml.fromRaml(GroupConversion.update(update, createRootGroup(), Timestamp.now()) -> groupConversionContext)
     }
   }
 
@@ -175,7 +176,8 @@ class GroupUpdateTest extends FunSuite with Matchers with GivenWhenThen with Gro
     )))
 
     When("The update is performed")
-    val result = Raml.fromRaml((GroupConversion.UpdateGroupStructureOp(update, createRootGroup(), Timestamp.now()), groupConversionContext))
+    val result = Raml.fromRaml(
+      GroupConversion.update(update, createRootGroup(), Timestamp.now()) -> groupConversionContext)
 
     validate(RootGroup.fromGroup(result))(RootGroup.valid(Set())).isSuccess should be(true)
 

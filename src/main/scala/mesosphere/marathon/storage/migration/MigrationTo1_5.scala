@@ -60,12 +60,12 @@ case class MigrationTo1_5(
 
   def migrateApp(service: ServiceDefinition): ServiceDefinition = {
     val network = migrateNetworks(service, migration.defaultNetworkName)
-    val prototypeContainer = service.map(_.hasContainer)(_.getContainer).getOrElse(EmptyMesosContainer)
+    val prototypeContainer = service.find(_.hasContainer)(_.getContainer).getOrElse(EmptyMesosContainer)
     val containerWithPortMappings =
       migrateDockerPortMappings(
         migrateIpDiscovery(
           prototypeContainer,
-          service.flat(_.hasOBSOLETEIpAddress)(_.getOBSOLETEIpAddress.map(_.hasDiscoveryInfo)(_.getDiscoveryInfo))
+          service.flat(_.hasOBSOLETEIpAddress)(_.getOBSOLETEIpAddress.find(_.hasDiscoveryInfo)(_.getDiscoveryInfo))
         )
       )
 
@@ -89,15 +89,15 @@ case class MigrationTo1_5(
   def migrateDockerPortMappings(container: ExtendedContainerInfo): ExtendedContainerInfo = {
     import mesos.ContainerInfo.Type._
     require(container.getPortMappingsCount == 0, "port mappings are new in 1.5, they shouldn't exist here yet")
-    container.map(c => c.hasDocker && c.getType == DOCKER)(_.getDocker.getOBSOLETEPortMappingsList).map { ports =>
+    container.find(c => c.hasDocker && c.getType == DOCKER)(_.getDocker.getOBSOLETEPortMappingsList).map { ports =>
       container.toBuilder.addAllPortMappings(ports.map { port =>
         val builder = ExtendedContainerInfo.PortMapping.newBuilder
           .setContainerPort(port.getContainerPort)
           .addAllLabels(port.getLabelsList)
-        port.map(_.hasHostPort)(_.getHostPort).foreach(builder.setHostPort)
-        port.map(_.hasServicePort)(_.getServicePort).foreach(builder.setServicePort)
-        port.map(_.hasName)(_.getName).foreach(builder.setName)
-        port.map(_.hasProtocol)(_.getProtocol).foreach(builder.setProtocol)
+        port.find(_.hasHostPort)(_.getHostPort).foreach(builder.setHostPort)
+        port.find(_.hasServicePort)(_.getServicePort).foreach(builder.setServicePort)
+        port.find(_.hasName)(_.getName).foreach(builder.setName)
+        port.find(_.hasProtocol)(_.getProtocol).foreach(builder.setProtocol)
         builder.build
       }).build
     }.getOrElse(container)
@@ -109,14 +109,14 @@ case class MigrationTo1_5(
   def migrateIpDiscovery(container: ExtendedContainerInfo, maybeDiscovery: Option[DiscoveryInfo]): ExtendedContainerInfo = {
     import mesos.ContainerInfo.Type._
     require(container.getPortMappingsCount == 0, "port mappings are new in 1.5, they shouldn't exist here yet")
-    val containerType = container.map(_.hasType)(_.getType).getOrElse(MESOS)
+    val containerType = container.find(_.hasType)(_.getType).getOrElse(MESOS)
     (containerType, maybeDiscovery) match {
       case (MESOS, Some(discovery)) =>
         val portMappings = discovery.getPortsList.map { port =>
           val builder = ExtendedContainerInfo.PortMapping.newBuilder()
             .setContainerPort(port.getNumber)
-          port.map(_.hasName)(_.getName).foreach(builder.setName)
-          port.map(_.hasProtocol)(_.getProtocol).foreach(builder.setProtocol)
+          port.find(_.hasName)(_.getName).foreach(builder.setName)
+          port.find(_.hasProtocol)(_.getProtocol).foreach(builder.setProtocol)
           // the old IP/CT api didn't let users map discovery ports to host ports
           builder.build
         }
@@ -143,7 +143,7 @@ case class MigrationTo1_5(
       NetworkDefinition.newBuilder
         .setMode(NetworkDefinition.Mode.BRIDGE)
         .addAllLabels(ipaddr.getLabelsList)
-        .setName(ipaddr.map(_.hasNetworkName)(_.getNetworkName).getOrElse(migrateUnnamedContainerNetworkName))
+        .setName(ipaddr.find(_.hasNetworkName)(_.getNetworkName).getOrElse(migrateUnnamedContainerNetworkName))
         .build
 
     def bridgeNetworking(ipaddr: Protos.IpAddress) =
@@ -155,8 +155,8 @@ case class MigrationTo1_5(
     def hostNetworking =
       NetworkDefinition.newBuilder.setMode(NetworkDefinition.Mode.HOST).build
 
-    val ipAddress = service.map(_.hasOBSOLETEIpAddress)(_.getOBSOLETEIpAddress)
-    val dockerNetwork = service.flat(_.hasContainer)(_.getContainer.flat(_.hasDocker)(_.getDocker.map(_.hasOBSOLETENetwork)(_.getOBSOLETENetwork)))
+    val ipAddress = service.find(_.hasOBSOLETEIpAddress)(_.getOBSOLETEIpAddress)
+    val dockerNetwork = service.flat(_.hasContainer)(_.getContainer.flat(_.hasDocker)(_.getDocker.find(_.hasOBSOLETENetwork)(_.getOBSOLETENetwork)))
     (ipAddress, dockerNetwork) match {
       // wants ip/ct with a specific network mode
       case (Some(ipaddr), Some(network)) =>
@@ -171,7 +171,7 @@ case class MigrationTo1_5(
       // wants ip/ct with some network mode.
       // if the user gave us a name try to figure out what they want.
       case (Some(ipaddr), None) =>
-        ipaddr.map(_.hasNetworkName)(_.getNetworkName) match {
+        ipaddr.find(_.hasNetworkName)(_.getNetworkName) match {
           case Some(name) if name == ContainerSerializer.MesosBridgeName => // users shouldn't do this, but we're tolerant
             bridgeNetworking(ipaddr)
           case _ =>
@@ -200,7 +200,7 @@ object MigrationTo1_5 {
 
   // stupid helpers because dealing with protobufs is tedious
   implicit class ProtoMappers[T <: MessageOrBuilder](t: T) {
-    def map[A](b: T => Boolean)(f: T => A): Option[A] = if (b(t)) Some(f(t)) else None
+    def find[A](b: T => Boolean)(f: T => A): Option[A] = if (b(t)) Some(f(t)) else None
     def flat[A](b: T => Boolean)(f: T => Option[A]): Option[A] = if (b(t)) f(t) else None
   }
 }

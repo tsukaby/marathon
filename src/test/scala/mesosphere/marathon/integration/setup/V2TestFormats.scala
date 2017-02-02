@@ -3,6 +3,7 @@ package integration.setup
 
 import mesosphere.marathon.core.event._
 import mesosphere.marathon.raml.Raml
+import mesosphere.marathon.raml.RamlConversionTesting._
 import mesosphere.marathon.state.{ Group, RootGroup, Timestamp }
 import mesosphere.marathon.upgrade.DeploymentPlan
 import play.api.libs.json._

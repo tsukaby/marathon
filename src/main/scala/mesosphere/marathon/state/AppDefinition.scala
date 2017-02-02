@@ -89,11 +89,15 @@ case class AppDefinition(
 
   import mesosphere.mesos.protos.Implicits._
 
-  require(networks.nonEmpty, "an application must declare requisite networks")
+  require(networks.nonEmpty, "an application must declare at least one network")
 
   require(
     (!networks.exists(!_.eq(HostNetwork))) || portDefinitions.isEmpty,
     s"non-host-mode networking ($networks) and ports/portDefinitions ($portDefinitions) are not allowed at the same time")
+
+  require(
+    !(networks.exists(_.eq(HostNetwork)) && container.fold(false)(c => c.portMappings.nonEmpty)),
+    "port-mappings may not be used in conjunction with host networking")
 
   require(
     !(portDefinitions.nonEmpty && container.fold(false)(_.portMappings.nonEmpty)),
@@ -223,7 +227,6 @@ case class AppDefinition(
       else
         OnlyVersion(Timestamp(proto.getVersion))
 
-    // TODO(jdef) instead of flattening, handle deser problems some other way?
     val networks: Seq[Network] = proto.getNetworksList.flatMap(Network.fromProto)(collection.breakOut)
 
     val residencyOption = if (proto.hasResidency) Some(ResidencySerializer.fromProto(proto.getResidency)) else None

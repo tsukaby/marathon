@@ -33,6 +33,7 @@ object Network {
 
   val DefaultLabels: Map[String, String] = Map.empty
 
+  /** @return deserialized Network, only None if network type is `UNKNOWN` (should never happen in practice) */
   def fromProto(net: NetworkDefinition): Option[Network] = {
     import NetworkDefinition.Mode._
 

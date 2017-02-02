@@ -1,9 +1,7 @@
 package mesosphere.marathon
 package raml
 
-import mesosphere.marathon.core.pod.PodDefinition
 import mesosphere.marathon.state.{ AppDefinition, PathId, Timestamp, Group => CoreGroup, VersionInfo => CoreVersionInfo }
-import mesosphere.marathon.state.PathId._
 
 trait GroupConversion {
 
@@ -16,56 +14,37 @@ trait GroupConversion {
       op.apply(context)
     }
 
-  // intended for TESTING ONLY, see V2TestFormats
-  implicit val groupRamlReads: Reads[Group, CoreGroup] = Reads { group =>
-    val appsById: Map[AppDefinition.AppKey, AppDefinition] = group.apps.map { ramlApp =>
-      val app: AppDefinition = Raml.fromRaml(ramlApp) // assume that we only generate canonical app json
-      app.id -> app
-    }(collection.breakOut)
-    val groupsById: Map[PathId, CoreGroup] = group.groups.map { ramlGroup =>
-      val grp: CoreGroup = Raml.fromRaml(ramlGroup)
-      grp.id -> grp
-    }(collection.breakOut)
-    CoreGroup(
-      id = group.id.toPath,
-      apps = appsById,
-      pods = Map.empty[PathId, PodDefinition], // we never read in pods
-      groupsById = groupsById,
-      dependencies = group.dependencies.map(_.toPath),
-      version = group.version.map(Timestamp(_)).getOrElse(Timestamp.now()),
-      transitiveAppsById = appsById ++ groupsById.values.flatMap(_.transitiveAppsById),
-      transitivePodsById = groupsById.values.flatMap(_.transitivePodsById)(collection.breakOut)
-    )
-  }
 }
 
 object GroupConversion extends GroupConversion {
 
+  def update(gu: GroupUpdate, g: CoreGroup, t: Timestamp): UpdateGroupStructureOp = UpdateGroupStructureOp(gu, g, t)
+
   case class UpdateGroupStructureOp(
-      update: GroupUpdate,
+      groupUpdate: GroupUpdate,
       current: CoreGroup,
       timestamp: Timestamp
   ) {
     import UpdateGroupStructureOp._
 
-    require(update.scaleBy.isEmpty, "For a structural update, no scale should be given.")
-    require(update.version.isEmpty, "For a structural update, no version should be given.")
+    require(groupUpdate.scaleBy.isEmpty, "For a structural update, no scale should be given.")
+    require(groupUpdate.version.isEmpty, "For a structural update, no version should be given.")
 
     def apply(implicit ctx: Context): CoreGroup = {
-      val effectiveGroups: Map[PathId, CoreGroup] = update.groups.fold(current.groupsById) { updates =>
+      val effectiveGroups: Map[PathId, CoreGroup] = groupUpdate.groups.fold(current.groupsById) { updates =>
         updates.map { groupUpdate =>
           val gid = groupId(groupUpdate).canonicalPath(current.id)
-          val newGroup = current.groupsById.get(gid).fold(toGroup(groupUpdate, gid, timestamp))(group => UpdateGroupStructureOp(groupUpdate, group, timestamp).apply)
+          val newGroup = current.groupsById.get(gid).fold(toGroup(groupUpdate, gid, timestamp))(group => update(groupUpdate, group, timestamp).apply)
           newGroup.id -> newGroup
         }(collection.breakOut)
       }
       val effectiveApps: Map[AppDefinition.AppKey, AppDefinition] =
-        update.apps.map(_.map(ctx.preprocess)).getOrElse(current.apps.values).map { currentApp =>
+        groupUpdate.apps.map(_.map(ctx.validateNormalizeConvert)).getOrElse(current.apps.values).map { currentApp =>
           val app = toApp(current.id, currentApp, timestamp)
           app.id -> app
         }(collection.breakOut)
 
-      val effectiveDependencies = update.dependencies.fold(current.dependencies)(_.map(PathId(_).canonicalPath(current.id)))
+      val effectiveDependencies = groupUpdate.dependencies.fold(current.dependencies)(_.map(PathId(_).canonicalPath(current.id)))
       CoreGroup(
         id = current.id,
         apps = effectiveApps,
@@ -80,7 +59,7 @@ object GroupConversion extends GroupConversion {
 
   object UpdateGroupStructureOp {
 
-    def groupId(update: GroupUpdate): PathId = update.id.map(PathId(_)).getOrElse(
+    def groupId(groupUpdate: GroupUpdate): PathId = groupUpdate.id.map(PathId(_)).getOrElse(
       // validation should catch this..
       throw new SerializationFailedException("No group id was given!")
     )
@@ -91,13 +70,13 @@ object GroupConversion extends GroupConversion {
         versionInfo = CoreVersionInfo.OnlyVersion(version))
     }
 
-    def toGroup(update: GroupUpdate, gid: PathId, version: Timestamp)(implicit ctx: Context): CoreGroup = {
-      val appsById: Map[AppDefinition.AppKey, AppDefinition] = update.apps.getOrElse(Set.empty).map { currentApp =>
-        val app = toApp(gid, ctx.preprocess(currentApp), version)
+    def toGroup(groupUpdate: GroupUpdate, gid: PathId, version: Timestamp)(implicit ctx: Context): CoreGroup = {
+      val appsById: Map[AppDefinition.AppKey, AppDefinition] = groupUpdate.apps.getOrElse(Set.empty).map { currentApp =>
+        val app = toApp(gid, ctx.validateNormalizeConvert(currentApp), version)
         app.id -> app
       }(collection.breakOut)
 
-      val groupsById: Map[PathId, CoreGroup] = update.groups.getOrElse(Seq.empty).map { currentGroup =>
+      val groupsById: Map[PathId, CoreGroup] = groupUpdate.groups.getOrElse(Seq.empty).map { currentGroup =>
         val group = toGroup(currentGroup, groupId(currentGroup).canonicalPath(gid), version)
         group.id -> group
       }(collection.breakOut)
@@ -107,14 +86,15 @@ object GroupConversion extends GroupConversion {
         apps = appsById,
         pods = Map.empty,
         groupsById = groupsById,
-        dependencies = update.dependencies.fold(Set.empty[PathId])(_.map(PathId(_).canonicalPath(gid))),
+        dependencies = groupUpdate.dependencies.fold(Set.empty[PathId])(_.map(PathId(_).canonicalPath(gid))),
         version = version,
         transitiveAppsById = appsById ++ groupsById.values.flatMap(_.transitiveAppsById),
-        transitivePodsById = Map.empty)
+        transitivePodsById = Map.empty // we don't support updates to pods via group-update operations
+      )
     }
   }
 
   trait Context {
-    def preprocess(app: App): AppDefinition
+    def validateNormalizeConvert(app: App): AppDefinition
   }
 }

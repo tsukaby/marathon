@@ -51,6 +51,7 @@ trait AppConversion extends ConstraintConversion with EnvVarConversion with Heal
       gpus = app.resources.gpus,
       healthChecks = app.healthChecks.toRaml,
       instances = app.instances,
+      ipAddress = None, // deprecated field
       labels = app.labels,
       maxLaunchDelaySeconds = app.backoffStrategy.maxLaunchDelay.toSeconds.toInt,
       mem = app.resources.mem,
@@ -93,13 +94,12 @@ trait AppConversion extends ConstraintConversion with EnvVarConversion with Heal
   }
 
   implicit val fetchUriReader: Reads[Artifact, FetchUri] = Reads { artifact =>
-    import FetchUri.defaultInstance
     FetchUri(
       uri = artifact.uri,
-      extract = artifact.extract.getOrElse(defaultInstance.extract),
-      executable = artifact.executable.getOrElse(defaultInstance.executable),
-      cache = artifact.cache.getOrElse(defaultInstance.cache),
-      outputFile = artifact.destPath.orElse(defaultInstance.outputFile)
+      extract = artifact.extract.getOrElse(FetchUri.defaultExtract),
+      executable = artifact.executable.getOrElse(FetchUri.defaultExecutable),
+      cache = artifact.cache.getOrElse(FetchUri.defaultCache),
+      outputFile = artifact.destPath.orElse(FetchUri.defaultOutputFile)
     )
   }
 
@@ -126,9 +126,6 @@ trait AppConversion extends ConstraintConversion with EnvVarConversion with Heal
   }
 
   implicit val appRamlReader: Reads[App, AppDefinition] = Reads[App, AppDefinition] { app =>
-    // TODO not all validation has been applied to the raml; most app validation still just validates the model.
-    // there's also some code here that would probably be better off in a raml.App `normalization` func.
-
     val selectedStrategy = ResidencyAndUpgradeStrategy(
       app.residency.map(Raml.fromRaml(_)),
       app.upgradeStrategy.map(Raml.fromRaml(_)),

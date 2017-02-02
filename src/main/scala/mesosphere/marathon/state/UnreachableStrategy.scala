@@ -5,7 +5,6 @@ import com.wix.accord._
 import com.wix.accord.dsl._
 
 import scala.concurrent.duration._
-import mesosphere.marathon.Protos
 import FiniteDuration._ // HACK: work around for "diverting implicit" compilation errors in IDEA
 
 /**
