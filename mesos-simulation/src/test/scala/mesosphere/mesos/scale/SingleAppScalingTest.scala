@@ -1,12 +1,13 @@
+
 package mesosphere.mesos.scale
 
 import mesosphere.AkkaIntegrationFunTest
-import mesosphere.marathon.IntegrationTest
+import mesosphere.marathon.{IntegrationTest, UnstableTest}
 import mesosphere.marathon.api.v2.json.AppUpdate
 import mesosphere.marathon.integration.facades.MarathonFacade._
-import mesosphere.marathon.integration.facades.{ ITDeploymentResult, MarathonFacade }
+import mesosphere.marathon.integration.facades.{ITDeploymentResult, MarathonFacade}
 import mesosphere.marathon.integration.setup._
-import mesosphere.marathon.state.{ AppDefinition, PathId }
+import mesosphere.marathon.state.{AppDefinition, PathId}
 import org.scalatest.concurrent.Eventually
 import org.slf4j.LoggerFactory
 import play.api.libs.json._
@@ -20,6 +21,7 @@ object SingleAppScalingTest {
 }
 
 @IntegrationTest
+@UnstableTest
 class SingleAppScalingTest extends AkkaIntegrationFunTest with ZookeeperServerTest with SimulatedMesosTest with MarathonTest with Eventually {
   val maxTasksPerOffer = Option(System.getenv("MARATHON_MAX_TASKS_PER_OFFER")).getOrElse("1")
 
