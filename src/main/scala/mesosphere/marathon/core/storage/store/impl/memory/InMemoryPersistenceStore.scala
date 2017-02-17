@@ -3,10 +3,13 @@ package mesosphere.marathon.core.storage.store.impl.memory
 import java.time.OffsetDateTime
 
 import akka.stream.Materializer
-import akka.stream.scaladsl.Source
+import akka.stream.scaladsl.{ Sink, Source }
+import akka.util.ByteString
 import akka.{ Done, NotUsed }
 import mesosphere.marathon.Protos.StorageVersion
+import mesosphere.marathon.core.storage.backup.BackupItem
 import mesosphere.marathon.core.storage.store.impl.{ BasePersistenceStore, CategorizedKey }
+import mesosphere.marathon.io.IO
 import mesosphere.marathon.metrics.Metrics
 import mesosphere.marathon.storage.migration.StorageVersions
 import mesosphere.marathon.util.Lock
@@ -74,4 +77,20 @@ class InMemoryPersistenceStore(implicit
 
   override protected[store] def allKeys(): Source[CategorizedKey[String, RamId], NotUsed] =
     Source(entries.keySet.filter(_.version.isEmpty).map(id => CategorizedKey(id.category, id))(collection.breakOut))
+
+  override def backup(): Source[BackupItem, NotUsed] = {
+    Source.fromIterator(() => entries.iterator.map {
+      case (key, value) =>
+        BackupItem(key.category, key.id, key.version, ByteString(IO.objectToByteArray(value.value)))
+    })
+  }
+
+  override def restore(source: Source[BackupItem, NotUsed]): Future[Done] = {
+    val sink = Sink.foreach[BackupItem] { item =>
+      val value = IO.byteArrayToObject[AnyRef](item.data.toArray)
+      entries.put(RamId(item.category, item.key, item.version), Identity(value))
+    }
+    entries.clear()
+    source.runWith(sink)
+  }
 }

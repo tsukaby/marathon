@@ -7,11 +7,12 @@ import java.util.UUID
 
 import akka.actor.Scheduler
 import akka.stream.Materializer
-import akka.stream.scaladsl.Source
+import akka.stream.scaladsl.{ Merge, Sink, Source }
 import akka.util.ByteString
 import akka.{ Done, NotUsed }
 import com.typesafe.scalalogging.StrictLogging
 import mesosphere.marathon.Protos.{ StorageVersion, ZKStoreEntry }
+import mesosphere.marathon.core.storage.backup.BackupItem
 import mesosphere.marathon.core.storage.store.impl.{ BasePersistenceStore, CategorizedKey }
 import mesosphere.marathon.metrics.Metrics
 import mesosphere.marathon.storage.migration.Migration
@@ -217,7 +218,7 @@ class ZkPersistenceStore(
               creatingParentContainersIfNeeded = true, data = Some(v.bytes))).asTry) match {
               case Success(_) =>
                 Done
-              case Failure(e: NodeExistsException) =>
+              case Failure(_: NodeExistsException) =>
                 // it could have been created by another call too... (e.g. creatingParentContainers if needed could
                 // have created the node when creating the parent's, e.g. the version was created first)
                 await(limitRequests(client.setData(id.path, v.bytes)))
@@ -258,5 +259,27 @@ class ZkPersistenceStore(
       }
     }
     Source.fromFuture(sources).flatMapConcat(identity).map { k => CategorizedKey(k.category, k) }
+  }
+
+  @SuppressWarnings(Array("all")) // async/await
+  override def backup(): Source[BackupItem, NotUsed] = {
+    val ids: Source[ZkId, NotUsed] = allKeys().map(_.key)
+    val versions: Source[ZkId, NotUsed] = ids.flatMapConcat(id => rawVersions(id).map(v => id.copy(version = Some(v))))
+    val combined = Source.combine(ids, versions)(Merge(_))
+    combined.mapAsync(maxConcurrent) { id =>
+      rawGet(id).filter(_.isDefined).map(ser => BackupItem(id.category, id.id, id.version, ser.get.bytes))
+    }
+  }
+
+  @SuppressWarnings(Array("all")) // async/await
+  override def restore(source: Source[BackupItem, NotUsed]): Future[Done] = async {
+    val sink = Sink.foldAsync[Done, BackupItem](Done) { (_, backup) =>
+      val id = ZkId(backup.category, backup.key, backup.version)
+      rawStore(id, ZkSerialized(backup.data))
+    }
+    // clean storage
+    await(client.delete("/", guaranteed = true, deletingChildrenIfNeeded = true))
+    // restore
+    await(source.runWith(sink))
   }
 }

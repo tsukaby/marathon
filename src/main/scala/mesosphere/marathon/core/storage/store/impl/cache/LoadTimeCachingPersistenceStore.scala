@@ -11,6 +11,7 @@ import akka.stream.scaladsl.Source
 import akka.{ Done, NotUsed }
 import com.typesafe.scalalogging.StrictLogging
 import mesosphere.marathon.Protos.StorageVersion
+import mesosphere.marathon.core.storage.backup.BackupItem
 import mesosphere.marathon.core.storage.store.impl.BasePersistenceStore
 import mesosphere.marathon.core.storage.store.{ IdResolver, PersistenceStore }
 import mesosphere.marathon.util.KeyedLock
@@ -189,6 +190,10 @@ class LoadTimeCachingPersistenceStore[K, Category, Serialized](
       }
     }
   }
+
+  override def backup(): Source[BackupItem, NotUsed] = store.backup()
+
+  override def restore(source: Source[BackupItem, NotUsed]): Future[Done] = store.restore(source)
 
   override def versions[Id, V](id: Id)(implicit ir: IdResolver[Id, V, Category, K]): Source[OffsetDateTime, NotUsed] =
     store.versions(id)

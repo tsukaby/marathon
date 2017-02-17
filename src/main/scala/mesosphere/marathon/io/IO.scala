@@ -9,6 +9,7 @@ import java.util.zip.{ GZIPInputStream, GZIPOutputStream }
 import com.google.common.io.ByteStreams
 
 import scala.annotation.tailrec
+import scala.reflect.ClassTag
 import scala.util.{ Failure, Success, Try }
 
 object IO {
@@ -123,6 +124,24 @@ object IO {
       fn(closeable)
     } finally {
       Try(closeable.close())
+    }
+  }
+
+  def objectToByteArray(any: Any): Array[Byte] = {
+    using(new ByteArrayOutputStream()) { stream =>
+      val obj = new ObjectOutputStream(stream)
+      obj.writeObject(any)
+      obj.close()
+      stream.toByteArray
+    }
+  }
+
+  def byteArrayToObject[T](bytes: Array[Byte])(implicit ClassT: ClassTag[T]): Option[T] = {
+    using(new ObjectInputStream(new ByteArrayInputStream(bytes))) { stream =>
+      stream.readObject() match {
+        case ClassT(t) => Some(t)
+        case _ => None
+      }
     }
   }
 }
